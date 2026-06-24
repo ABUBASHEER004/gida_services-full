@@ -1,0 +1,39 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "gida-service",
+          "appId": "1:880257631582:android:f71e14db2f060cb964bbcf",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "gida-service",
+          "configurations": {
+            "android": "1:880257631582:android:f71e14db2f060cb964bbcf",
+            "ios": "1:880257631582:ios:49005a3668383cce64bbcf",
+            "macos": "1:880257631582:ios:49005a3668383cce64bbcf",
+            "web": "1:880257631582:web:6c8da3952a35581364bbcf",
+            "windows": "1:880257631582:web:ce99a6b5a47df25a64bbcf"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
