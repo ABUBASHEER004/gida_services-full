@@ -103,12 +103,177 @@ class HomeScreen extends StatelessWidget {
       "icon": Icons.woman,
     },
     {
+      "name": "Painter",
+      "icon": Icons.man_2,
+    },
+    {
       "name": "Delivery Services",
       "icon": Icons.man,
     },
     {
       "name": "Order Snacks",
       "icon": Icons.woman_2,
+    },
+     {
+      "name":"Napep Booking",
+      "icon": Icons.man_2,
+    },
+
+    {
+      "name":"Electronic Appliances Repair",
+    "icon": Icons.electrical_services,
+    },
+    {
+      "name":"Animal clinic",
+    "icon": Icons.local_hospital,
+    },
+    {
+      "name":"chicken Booking, feeds and Drugs",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Diagnostic centre",
+    "icon": Icons.local_hospital_outlined,
+    },
+    {
+      "name":"Hospital",
+    "icon": Icons.local_hospital,
+    },
+    {
+      "name":"Building Materials",
+    "icon": Icons.man,
+    },
+    {
+      "name":"Plumbing Materials Seller",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Carpentry Materials Seller",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Cement seller",
+      "icon": Icons.man_2,
+    },
+    {
+      "name":"Pharmacy",
+    "icon": Icons.local_pharmacy,
+    },
+    {
+      "name":"Fabrics(shadda/yadi) Dealer ",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Abaya Seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Football Kits Seller",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Kitchen Utensils Seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Restaurant",
+    "icon": Icons.restaurant,
+    },
+    {
+      "name":"Graphic Designer",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Building Labourer",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Construction Firms",
+    "icon": Icons.construction,
+    },
+    {
+      "name":"Real Estate Agent",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Pure Water Distributor",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Cloths/Baby cloths Seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Make-up Saloon",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Printing, Writing and Reading Materials(Books) Seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Electronic Appliances Seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Provision Store",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Islamic Lesson Teacher",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Beds Seller",
+    "icon": Icons.bed,
+    },
+    {
+      "name":"Furniture Seller",
+    "icon": Icons.chair,
+    },
+    {
+      "name":"Suya Spot",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Animals Seller",
+    "icon": Icons.man,
+    },
+    {
+      "name":"Rice Seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Grain Seller",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Yam Seller",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Fruits Seller",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Rubber Home Equipment Seller ",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Palm oil/Groundnut oil seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"Petrol Black Marketer",
+    "icon": Icons.man_2,
+    },
+    {
+      "name":"Women Beauty Products Seller",
+    "icon": Icons.woman_2,
+    },
+    {
+      "name":"School",
+    "icon": Icons.school,
     },
   ];
 
@@ -196,3 +361,4 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'provider_dashboard.dart';
+import '../services/notification_service.dart';
 
 class ProviderLogin extends StatefulWidget {
   const ProviderLogin({super.key});
@@ -47,6 +49,20 @@ class _ProviderLoginState extends State<ProviderLogin> {
     }
 
     final uid = user.uid;
+
+// =========================
+// SAVE FCM TOKEN
+// =========================
+final token = await FirebaseMessaging.instance.getToken();
+
+await FirebaseFirestore.instance
+    .collection('providers')
+    .doc(uid)
+    .set({
+  'fcmToken': token,
+  'isOnline': true,
+  'lastSeen': FieldValue.serverTimestamp(),
+}, SetOptions(merge: true));
 
     // 🔍 GET PROVIDER DATA
     final doc = await FirebaseFirestore.instance
@@ -112,6 +128,8 @@ class _ProviderLoginState extends State<ProviderLogin> {
     if (!mounted) return;
 
     // 🚀 GO TO DASHBOARD
+    await NotificationService.initialize();
+    
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -179,3 +197,4 @@ class _ProviderLoginState extends State<ProviderLogin> {
     );
   }
 }
+

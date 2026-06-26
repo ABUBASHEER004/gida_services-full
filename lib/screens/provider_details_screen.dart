@@ -92,3 +92,4 @@ class ProviderDetailsScreen extends StatelessWidget {
     );
   }
 }
+

@@ -77,3 +77,4 @@ class _ProviderSignUpState extends State<ProviderSignUp> {
     );
   }
 }
+

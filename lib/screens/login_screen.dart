@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'home_screen.dart';
 import 'provider_dashboard.dart';
@@ -12,6 +13,19 @@ class LoginScreen extends StatefulWidget {
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
+}
+Future<void> saveFCMToken(String uid) async {
+  final token =
+      await FirebaseMessaging.instance.getToken();
+
+  if (token == null) return;
+
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .set({
+    'fcmToken': token,
+  }, SetOptions(merge: true));
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -88,6 +102,7 @@ By continuing, you agree to follow all rules of this platform.
       final uid = credential.user!.uid;
 
       await setOnline(uid);
+      await saveFCMToken(uid);
 
       final doc =
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -185,6 +200,7 @@ By continuing, you agree to follow all rules of this platform.
       final uid = credential.user!.uid;
 
       await setOnline(uid);
+      await saveFCMToken(uid);
 
       final doc =
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -416,5 +432,6 @@ Widget build(BuildContext context) {
   );
 }
 }
+
 
 

@@ -23,9 +23,11 @@ class _ProviderRegisterState extends State<ProviderRegister> {
 
   final List<String> serviceCategories = const [
     "Waste Pickup",
+    "Shoe Seller",
     "Vegetables and Kayan Miya",
     "Meat Seller",
     "Plumber",
+    "Tailor",
     "Electrician",
     "Carpenter",
     "Wielding",
@@ -46,6 +48,50 @@ class _ProviderRegisterState extends State<ProviderRegister> {
     "Order Snacks",
     "Delivery Services",
     "Food Delivery",
+    "Napep Booking",
+    "Electronic Appliances Repair",
+    "Animal clinic",
+    "chicken Booking, feeds and Drugs",
+    "Diagnostic centre",
+    "Hospital",
+    "Building Materials",
+    "Plumbing Materials Seller",
+    "Carpentry Materials Seller",
+    "Cement seller",
+    "Pharmacy",
+    "Fabrics(shadda/yadi) Dealer ",
+    "Abaya Seller",
+    "Football Kits Seller",
+    "Kitchen Utensils Seller",
+    "Restaurant",
+    "Graphic Designer",
+    "Building Labourer",
+    "Construction Firms",
+    "Real Estate Agent",
+    "Pure Water Distributor",
+    "Cloths/Baby Cloths Seller",
+    "Make-up Saloon",
+    "Printing, Writing and Reading Materials(Books) Seller",
+    "Electronic Appliances Seller",
+    "Provision Store",
+    "Islamic Lesson Teacher",
+    "Beds Seller",
+    "Furniture Seller",
+    "Suya Spot",
+    "Animals Seller",
+    "Rice Seller",
+    "Grain Seller",
+    "Yam Seller",
+    "Fruits Seller",
+    "Rubber Home Equipment Seller ",
+    "Palm oil/Groundnut oil seller",
+    "Petrol Black Marketer",
+    "Women Beauty Products Seller",
+    "Painter",
+
+
+
+  
   ];
 
   String selectedService = "Waste Pickup";
@@ -320,5 +366,6 @@ By registering, you agree to follow these rules.
     );
   }
 }
+
 
 

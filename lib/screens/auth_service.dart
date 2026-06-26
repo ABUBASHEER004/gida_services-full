@@ -161,3 +161,4 @@ class AuthService {
     }, SetOptions(merge: true));
   }
 }
+

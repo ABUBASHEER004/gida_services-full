@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../services/notification_service.dart';
 
 import 'chat_screen.dart';
 import 'login_screen.dart';
 import 'provider_edit_profile.dart';
+import 'dart:async';
 
 class ProviderDashboard extends StatefulWidget {
   final String providerId;
   final String providerName;
+
 
   const ProviderDashboard({
     super.key,
@@ -20,12 +24,52 @@ class ProviderDashboard extends StatefulWidget {
   State<ProviderDashboard> createState() => _ProviderDashboardState();
 }
 
-class _ProviderDashboardState extends State<ProviderDashboard> {
+class _ProviderDashboardState extends State<ProviderDashboard>
+    with WidgetsBindingObserver {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+StreamSubscription? _messageListener;
+
   bool isOnline = false;
   String address = "Loading location...";
+
+Future<void> saveFcmToken() async {
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+
+    if (token != null) {
+      await _firestore
+          .collection('providers')
+          .doc(widget.providerId)
+          .set({
+        'fcmToken': token,
+      }, SetOptions(merge: true));
+    }
+  } catch (e) {
+    debugPrint("FCM Token Error: $e");
+  }
+}
+void listenForNewMessages() {
+  _messageListener = FirebaseFirestore.instance
+      .collectionGroup('messages')
+      .where('receiverId', isEqualTo: widget.providerId)
+      .snapshots()
+      .listen((snapshot) {
+    for (final change in snapshot.docChanges) {
+      if (change.type == DocumentChangeType.added) {
+        final data = change.doc.data();
+
+        if (data == null) return;
+
+        NotificationService.showNotification(
+          "New Message",
+          data['message'] ?? '',
+        );
+      }
+    }
+  });
+}
 
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
@@ -42,19 +86,49 @@ Future<void> addHistory(String requestId, String action) async {
   });
 }
 
-  @override
-  void initState() {
-    super.initState();
-    loadProviderData();
-  }
+
+ @override
+void initState() {
+  super.initState();
+
+WidgetsBinding.instance.addObserver(this);
+
+toggleStatus(true);
+
+  loadProviderData();
+  saveFcmToken();
+
+  listenForNewMessages();
+
+  FirebaseMessaging.onMessage.listen((message) {
+    NotificationService.showNotification(
+      message.notification?.title ?? "New Message",
+      message.notification?.body ?? "",
+    );
+  });
+}
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  toggleStatus(
+    state == AppLifecycleState.resumed,
+  );
+}
 
   @override
-  void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
-    serviceController.dispose();
-    super.dispose();
-  }
+void dispose() {
+  WidgetsBinding.instance.removeObserver(this);
+
+  toggleStatus(false);
+
+  _messageListener?.cancel();
+
+  nameController.dispose();
+  phoneController.dispose();
+  serviceController.dispose();
+
+  super.dispose();
+}
 //
 
 Widget earningsCard() {
@@ -131,15 +205,27 @@ Widget earningsCard() {
   // EDIT PROFILE
   // =========================
   Future<void> openEditProfile() async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => ProviderEditProfile(providerId: widget.providerId),
-    );
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => ProviderEditProfile(
+      providerId: widget.providerId,
+    ),
+  );
 
-    loadProviderData();
-  }
+  // Reload provider data
+  await loadProviderData();
 
+  // Save latest FCM token
+  final token = await FirebaseMessaging.instance.getToken();
+
+  await _firestore
+      .collection('providers')
+      .doc(widget.providerId)
+      .set({
+    'fcmToken': token,
+  }, SetOptions(merge: true));
+}
   // =========================
   // ONLINE/OFFLINE
   // =========================
@@ -167,10 +253,74 @@ void openAdminChat() async {
 
   final chatId = "ADMIN_SUPPORT_$providerId";
 
-  await _firestore.collection("chats").doc(chatId).set({
-    "participants": ["ADMIN_SUPPORT", providerId],
-    "type": "provider_admin",
-    "updatedAt": FieldValue.serverTimestamp(),
+  await _firestore
+    .collection('chats')
+    .doc(chatId)
+    .set({
+  'participants': [
+    "ADMIN_SUPPORT",
+    widget.providerId,
+  ],
+
+  'participantNames': {
+    "ADMIN_SUPPORT": "ADMIN SUPPORT",
+    widget.providerId: widget.providerName,
+  },
+
+  'updatedAt': FieldValue.serverTimestamp(),
+}, SetOptions(merge: true));
+  if (!mounted) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+     builder: (_) => ChatScreen(
+  chatId: chatId,
+  senderId: providerId,
+  receiverId: "ADMIN_SUPPORT",
+  chatName: "ADMIN SUPPORT",
+),
+    ),
+  );
+}
+  // =========================
+  // CHAT WITH USER
+  // =========================
+  void openChat(String userId) async {
+  if (userId.isEmpty || widget.providerId.isEmpty) return;
+
+  final chatId =
+      userId.compareTo(widget.providerId) < 0
+          ? '${userId}_${widget.providerId}'
+          : '${widget.providerId}_$userId';
+
+  // Get user name
+  String userName = "Customer";
+
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(userId)
+      .get();
+
+  if (userDoc.exists) {
+    userName = userDoc['name'] ?? "Customer";
+  }
+
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(chatId)
+      .set({
+    'participants': [
+      userId,
+      widget.providerId,
+    ],
+
+    'participantNames': {
+      userId: userName,
+      widget.providerId: widget.providerName,
+    },
+
+    'updatedAt': FieldValue.serverTimestamp(),
   }, SetOptions(merge: true));
 
   if (!mounted) return;
@@ -179,34 +329,11 @@ void openAdminChat() async {
     context,
     MaterialPageRoute(
       builder: (_) => ChatScreen(
-        chatId: chatId,
-        senderId: providerId,
-      ),
-    ),
-  );
-}
-  // =========================
-  // CHAT WITH USER
-  // =========================
-  void openChat(String userId) {
-  if (userId.isEmpty || widget.providerId.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Invalid chat data")),
-    );
-    return;
-  }
-
-  final chatId = (userId.compareTo(widget.providerId) < 0)
-      ? '${userId}_${widget.providerId}'
-      : '${widget.providerId}_$userId';
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ChatScreen(
-        chatId: chatId,
-        senderId: widget.providerId,
-      ),
+  chatId: chatId,
+  senderId: widget.providerId,
+  receiverId: userId,
+  chatName: userName,
+),
     ),
   );
 }
@@ -309,11 +436,20 @@ Future<void> rejectRequest(String id) async {
   await addHistory(requestId, "Commission marked as PAID by provider");
 
   final chatId = "ADMIN_SUPPORT_${widget.providerId}";
-  await _firestore.collection("chats").doc(chatId).set({
-    "participants": ["ADMIN_SUPPORT", widget.providerId],
-    "lastMessage": "Commission marked as paid",
-    "updatedAt": FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
+ await _firestore.collection("chats").doc(chatId).set({
+  "participants": [
+    "ADMIN_SUPPORT",
+    widget.providerId,
+  ],
+
+  "participantNames": {
+    "ADMIN_SUPPORT": "ADMIN SUPPORT",
+    widget.providerId: widget.providerName,
+  },
+
+  "lastMessage": "Commission marked as paid",
+  "updatedAt": FieldValue.serverTimestamp(),
+}, SetOptions(merge: true));
 
   await _firestore.collection("chats").doc(chatId).collection("messages").add({
     "senderId": widget.providerId,
@@ -330,16 +466,24 @@ Future<void> rejectRequest(String id) async {
   // LOGOUT
   // =========================
   Future<void> logout() async {
-    await _auth.signOut();
+  await _firestore
+      .collection('providers')
+      .doc(widget.providerId)
+      .set({
+    'isOnline': false,
+    'lastSeen': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
 
-    if (!mounted) return;
+  await _auth.signOut();
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
-  }
+  if (!mounted) return;
+
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(builder: (_) => const LoginScreen()),
+    (route) => false,
+  );
+}
 
   Color statusColor(String status) {
     switch (status) {
@@ -518,6 +662,7 @@ Future<void> rejectRequest(String id) async {
     );
   }
 }
+
 
 
 

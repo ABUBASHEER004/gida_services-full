@@ -10,30 +10,23 @@ class ChatInboxScreen extends StatelessWidget {
     required this.currentUserId,
   });
 
-  String getChatTitle(List participants, String currentUserId) {
-    return participants.firstWhere(
-      (id) => id != currentUserId,
-      orElse: () => "Chat",
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Chats"),
       ),
-
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('chats')
             .where('participants', arrayContains: currentUserId)
             .orderBy('updatedAt', descending: true)
             .snapshots(),
-
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
           }
 
           final chats = snapshot.data!.docs;
@@ -49,17 +42,34 @@ class ChatInboxScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final chat = chats[index];
 
-              final participants = chat['participants'];
+              final participants =
+                  List<String>.from(chat['participants'] ?? []);
 
-              final otherUser = getChatTitle(
-                participants,
-                currentUserId,
+              final participantNames =
+                  Map<String, dynamic>.from(
+                chat['participantNames'] ?? {},
               );
 
-              return ListTile(
-                leading: const Icon(Icons.chat),
+              final otherUserId = participants.firstWhere(
+                (id) => id != currentUserId,
+                orElse: () => '',
+              );
 
-                title: Text(otherUser),
+              final otherUserName =
+                  participantNames[otherUserId] ??
+                  otherUserId;
+
+              return ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.chat),
+                ),
+
+                title: Text(
+                  otherUserName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
 
                 subtitle: Text(
                   chat['lastMessage'] ?? "No messages yet",
@@ -67,16 +77,21 @@ class ChatInboxScreen extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
 
-                trailing: const Icon(Icons.arrow_forward_ios),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                ),
 
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => ChatScreen(
-                        chatId: chat.id,
-                        senderId: currentUserId,
-                      ),
+  chatId: chat.id,
+  senderId: currentUserId,
+  receiverId: otherUserId,
+  chatName: otherUserName,
+),
                     ),
                   );
                 },
@@ -88,3 +103,4 @@ class ChatInboxScreen extends StatelessWidget {
     );
   }
 }
+

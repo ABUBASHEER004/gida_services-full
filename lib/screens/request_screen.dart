@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/notification_service.dart';
 
 import 'login_screen.dart';
 import 'chat_screen.dart';
@@ -75,12 +76,16 @@ class _RequestScreenState extends State<RequestScreen>
     }, SetOptions(merge: true));
   }
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    updateUserStatus(true);
-  }
+ @override
+void initState() {
+  super.initState();
+
+  WidgetsBinding.instance.addObserver(this);
+
+  updateUserStatus(true);
+
+  NotificationService.listenForChats(widget.userId);
+}
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -99,9 +104,11 @@ class _RequestScreenState extends State<RequestScreen>
   // LOGOUT
   // =========================
   Future<void> logout() async {
-    await updateUserStatus(false);
-    await _auth.signOut();
+  await updateUserStatus(false);
 
+  NotificationService.dispose();
+
+  await _auth.signOut();
     if (!mounted) return;
 
     Navigator.pushAndRemoveUntil(
@@ -204,10 +211,12 @@ class _RequestScreenState extends State<RequestScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          chatId: chatId,
-          senderId: widget.userId,
-        ),
+     builder: (_) => ChatScreen(
+  chatId: chatId,
+  senderId: widget.userId,
+  receiverId: widget.providerId,
+  chatName: widget.providerName,
+),
       ),
     );
   }
@@ -222,24 +231,35 @@ class _RequestScreenState extends State<RequestScreen>
         ? "${widget.userId}_$adminId"
         : "${adminId}_${widget.userId}";
 
-    await FirebaseFirestore.instance
-        .collection("chats")
-        .doc(chatId)
-        .set({
-      "participants": [widget.userId, adminId],
-      "lastMessage": "",
-      "lastMessageAt": FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+   await FirebaseFirestore.instance
+    .collection('chats')
+    .doc(chatId)
+    .set({
+  'participants': [
+    widget.userId,
+    adminId,
+  ],
+
+  'participantNames': {
+    widget.userId: "Customer",
+    adminId: "ADMIN SUPPORT",
+  },
+
+  'lastMessage': '',
+  'updatedAt': FieldValue.serverTimestamp(),
+}, SetOptions(merge: true));
 
     if (!mounted) return;
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          chatId: chatId,
-          senderId: widget.userId,
-        ),
+     builder: (_) => ChatScreen(
+  chatId: chatId,
+  senderId: widget.userId,
+  receiverId: adminId,
+  chatName: "ADMIN SUPPORT",
+),
       ),
     );
   }
@@ -364,15 +384,49 @@ class _RequestScreenState extends State<RequestScreen>
           children: [
             // PROVIDER CARD
             Card(
-              child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person)),
-                title: Text(widget.providerName),
-                trailing: IconButton(
-                  icon: const Icon(Icons.chat),
-                  onPressed: openChat,
-                ),
-              ),
-            ),
+  child: StreamBuilder<DocumentSnapshot>(
+    stream: FirebaseFirestore.instance
+        .collection('providers')
+        .doc(widget.providerId)
+        .snapshots(),
+    builder: (context, snapshot) {
+      bool online = false;
+      Timestamp? lastSeen;
+
+      if (snapshot.hasData && snapshot.data!.exists) {
+        final data =
+            snapshot.data!.data() as Map<String, dynamic>;
+
+        online = data['isOnline'] ?? false;
+        lastSeen = data['lastSeen'];
+      }
+
+      return ListTile(
+        leading: const CircleAvatar(
+          child: Icon(Icons.person),
+        ),
+
+        title: Text(widget.providerName),
+
+        subtitle: Text(
+          online
+              ? "Online"
+              : formatLastSeen(lastSeen),
+          style: TextStyle(
+            color: online
+                ? Colors.green
+                : Colors.grey,
+          ),
+        ),
+
+        trailing: IconButton(
+          icon: const Icon(Icons.chat),
+          onPressed: openChat,
+        ),
+      );
+    },
+  ),
+),
 
             const SizedBox(height: 10),
 

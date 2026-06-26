@@ -40,6 +40,42 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:880257631582:android:0d82c3501d8c871464bbcf",
+        "android_client_info": {
+          "package_name": "com.example.gida_services_new"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "880257631582-9p32nb9gd4f2bd5t26a5hu275hhvtov2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGRJqHvZIlz8Gp1wFPXql9bYUvC8ZFUXo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "880257631582-9p32nb9gd4f2bd5t26a5hu275hhvtov2.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "880257631582-3k7hj6mg62g2kus4ttaavpapnhjcvajg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.gidaServices"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

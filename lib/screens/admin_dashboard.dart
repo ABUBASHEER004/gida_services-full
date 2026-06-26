@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../services/notification_service.dart';
 
 import 'login_screen.dart';
 import 'admin_chat_viewer_screen.dart';
@@ -13,24 +15,55 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
+@override
+void initState() {
+  super.initState();
+
+  saveAdminToken();
+
+  FirebaseMessaging.onMessage.listen((message) {
+    NotificationService.showNotification(
+      message.notification?.title ?? "New Message",
+      message.notification?.body ?? "",
+    );
+  });
+}
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   int currentTab = 0;
+Future<void> saveAdminToken() async {
+  final user = FirebaseAuth.instance.currentUser;
 
+  if (user == null) return;
+
+  final token = await FirebaseMessaging.instance.getToken();
+
+  await FirebaseFirestore.instance
+      .collection('admins')
+      .doc(user.uid)
+      .set({
+    'fcmToken': token,
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
   // =========================
   // LOGOUT
   // =========================
   Future<void> logout() async {
-    await FirebaseAuth.instance.signOut();
+  NotificationService.dispose();
 
-    if (!mounted) return;
+  await FirebaseAuth.instance.signOut();
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
-  }
+  if (!mounted) return;
+
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const LoginScreen(),
+    ),
+    (route) => false,
+  );
+}
 
 Future<void> activateUser(String id) async {
   await _firestore.collection('users').doc(id).set({
@@ -626,5 +659,6 @@ return ListTile(
     );
   }
 }
+
 
 
