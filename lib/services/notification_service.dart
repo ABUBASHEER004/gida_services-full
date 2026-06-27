@@ -15,51 +15,74 @@ class NotificationService {
   // =========================
   // INITIALIZE
   // =========================
-  static Future<void> initialize() async {
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
+ static Future<void> initialize() async {
 
-    const settings = InitializationSettings(
-      android: androidSettings,
-    );
+  const AndroidInitializationSettings android =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    await notifications.initialize(settings);
+  const InitializationSettings settings =
+      InitializationSettings(
+    android: android,
+  );
 
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+  await notifications.initialize(settings);
 
-    FirebaseMessaging.onMessage.listen((message) {
-      showNotification(
-        message.notification?.title ?? "New Message",
-        message.notification?.body ?? "",
-      );
-    });
-  }
+  final androidPlugin =
+      notifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  await androidPlugin?.createNotificationChannel(
+    const AndroidNotificationChannel(
+      'gida_chat_channel',
+      'Chat Notifications',
+      description: 'Notifications for chat messages',
+      importance: Importance.high,
+    ),
+  );
+
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  FirebaseMessaging.onMessage.listen((message) {
+
+    final title =
+        message.notification?.title ??
+        message.data['title'] ??
+        "New Message";
+
+    final body =
+        message.notification?.body ??
+        message.data['body'] ??
+        "";
+
+    showNotification(title, body);
+  });
+}
 
   // =========================
   // SHOW LOCAL NOTIFICATION
   // =========================
  static Future<void> showNotification(
-  String title,
-  String body,
+    String title,
+    String body,
 ) async {
+
   const AndroidNotificationDetails androidDetails =
       AndroidNotificationDetails(
-    'chat_channel',
+    'gida_chat_channel',
     'Chat Notifications',
-    channelDescription: 'Chat Messages',
+    channelDescription: 'Chat notifications',
     importance: Importance.max,
     priority: Priority.high,
     playSound: true,
     enableVibration: true,
+    icon: '@mipmap/ic_launcher',
   );
 
-  const NotificationDetails notificationDetails =
-      NotificationDetails(
+  const NotificationDetails details = NotificationDetails(
     android: androidDetails,
   );
 
@@ -67,10 +90,9 @@ class NotificationService {
     DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title,
     body,
-    notificationDetails,
+    details,
   );
 }
-
   // =========================
   // USER / PROVIDER CHATS
   // =========================
@@ -78,36 +100,35 @@ class NotificationService {
   _chatSub?.cancel();
 
   _chatSub = FirebaseFirestore.instance
-      .collection('messages')
+      .collectionGroup('messages')
       .where('receiverId', isEqualTo: receiverId)
       .snapshots()
       .listen((snapshot) async {
     for (final change in snapshot.docChanges) {
       if (change.type != DocumentChangeType.added) continue;
 
-      final data = change.doc.data() as Map<String, dynamic>?;
+      final data = change.doc.data();
 
       if (data == null) continue;
 
-      // Don't notify for your own messages
       if (data['senderId'] == receiverId) continue;
-
-      final senderId = data['senderId'];
-
-      final senderDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(senderId)
-          .get();
 
       String senderName = "New Message";
 
-      if (senderDoc.exists) {
-        senderName = senderDoc.data()?['name'] ?? senderName;
-      }
+      try {
+        final senderDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(data['senderId'])
+            .get();
+
+        if (senderDoc.exists) {
+          senderName = senderDoc.data()?['name'] ?? senderName;
+        }
+      } catch (_) {}
 
       await showNotification(
         senderName,
-        data['message'] ?? "",
+        data['message'] ?? '',
       );
     }
   });
@@ -115,35 +136,30 @@ class NotificationService {
   // =========================
   // ADMIN SUPPORT CHAT
   // =========================
-  static void listenForAdminChats(String receiverId) {
-    _adminSub?.cancel();
+ static void listenForAdminChats(String receiverId) {
+  _adminSub?.cancel();
 
-    _adminSub = FirebaseFirestore.instance
-        .collection('messages')
-        .where('receiverId', isEqualTo: receiverId)
-        .snapshots()
-        .listen((snapshot) {
-      for (final change in snapshot.docChanges) {
-        if (change.type != DocumentChangeType.added) continue;
+  _adminSub = FirebaseFirestore.instance
+      .collectionGroup('messages')
+      .where('receiverId', isEqualTo: receiverId)
+      .snapshots()
+      .listen((snapshot) {
+    for (final change in snapshot.docChanges) {
+      if (change.type != DocumentChangeType.added) continue;
 
-        final data =
-            change.doc.data() as Map<String, dynamic>?;
+      final data = change.doc.data();
 
-        if (data == null) continue;
+      if (data == null) continue;
 
-        if (data['chatType'] != 'admin_support') {
-          continue;
-        }
+      if (data['chatType'] != 'admin_support') continue;
 
-        showNotification(
-          "Admin Support",
-          data['message']?.toString() ??
-              data['text']?.toString() ??
-              "New support message received",
-        );
-      }
-    });
-  }
+      showNotification(
+        "Admin Support",
+        data['message'] ?? '',
+      );
+    }
+  });
+}
 
   // =========================
   // REQUEST STATUS CHANGES

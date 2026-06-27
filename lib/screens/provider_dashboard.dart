@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../services/notification_service.dart';
-import 'customer_chats_screen.dart';
 
 import 'chat_screen.dart';
 import 'login_screen.dart';
@@ -13,7 +12,6 @@ import 'dart:async';
 class ProviderDashboard extends StatefulWidget {
   final String providerId;
   final String providerName;
-
 
   const ProviderDashboard({
     super.key,
@@ -30,96 +28,60 @@ class _ProviderDashboardState extends State<ProviderDashboard>
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-void openCustomerChats() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => CustomerChatsScreen(
-        providerId: widget.providerId,
-        providerName: widget.providerName,
-      ),
-    ),
-  );
-}
-StreamSubscription? _messageListener;
-
+ 
   bool isOnline = false;
   String address = "Loading location...";
 
-Future<void> saveFcmToken() async {
-  try {
-    final token = await FirebaseMessaging.instance.getToken();
+  Future<void> saveFcmToken() async {
+    try {
+     final token = await NotificationService.getToken();
+      debugPrint("FCM TOKEN: $token");
 
-    debugPrint("FCM TOKEN: $token");
+      if (token != null) {
+        await _firestore.collection('providers').doc(widget.providerId).set({
+          'fcmToken': token,
+        }, SetOptions(merge: true));
 
-    if (token != null) {
-      await _firestore
-          .collection('providers')
-          .doc(widget.providerId)
-          .set({
-        'fcmToken': token,
-      }, SetOptions(merge: true));
-
-      debugPrint("Token saved successfully");
-    }
-  } catch (e) {
-    debugPrint("FCM Token Error: $e");
-  }
-}
-void listenForNewMessages() {
-  _messageListener = FirebaseFirestore.instance
-      .collectionGroup('messages')
-      .where('receiverId', isEqualTo: widget.providerId)
-      .snapshots()
-      .listen((snapshot) {
-    for (final change in snapshot.docChanges) {
-      if (change.type == DocumentChangeType.added) {
-        final data = change.doc.data();
-
-        if (data == null) return;
-
-        NotificationService.showNotification(
-          "New Message",
-          data['message'] ?? '',
-        );
+        debugPrint("Token saved successfully");
       }
+    } catch (e) {
+      debugPrint("FCM Token Error: $e");
     }
-  });
-}
+  }
+
+ 
 
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
   final serviceController = TextEditingController();
-Future<void> addHistory(String requestId, String action) async {
-  await _firestore
-      .collection('requests')
-      .doc(requestId)
-      .collection('history')
-      .add({
-    'action': action,
-    'providerId': widget.providerId,
-    'timestamp': FieldValue.serverTimestamp(),
-  });
-}
+  Future<void> addHistory(String requestId, String action) async {
+    await _firestore
+        .collection('requests')
+        .doc(requestId)
+        .collection('history')
+        .add({
+      'action': action,
+      'providerId': widget.providerId,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
 
+  @override
+  void initState() {
+    super.initState();
 
- @override
-void initState() {
-  super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
-WidgetsBinding.instance.addObserver(this);
+    toggleStatus(true);
 
-toggleStatus(true);
+    loadProviderData();
+    saveFcmToken();
+    NotificationService.listenForChats(widget.providerId);
+    NotificationService.listenForAdminChats(widget.providerId);
+    NotificationService.listenForRequestUpdates(widget.providerId);
 
-  loadProviderData();
-  saveFcmToken();
-  NotificationService.listenForChats(widget.providerId);
-NotificationService.listenForAdminChats(widget.providerId);
-NotificationService.listenForRequestUpdates(widget.providerId);
-
-  listenForNewMessages();
-
-  FirebaseMessaging.onMessage.listen((message) {
+   
+FirebaseMessaging.onMessage.listen((message) {
     NotificationService.showNotification(
       message.notification?.title ?? "New Message",
       message.notification?.body ?? "",
@@ -127,93 +89,130 @@ NotificationService.listenForRequestUpdates(widget.providerId);
   });
 }
 
-@override
-void didChangeAppLifecycleState(AppLifecycleState state) {
-  toggleStatus(
-    state == AppLifecycleState.resumed,
-  );
-}
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    toggleStatus(
+      state == AppLifecycleState.resumed,
+    );
+  }
 
- @override
-void dispose() {
-  WidgetsBinding.instance.removeObserver(this);
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
 
-  toggleStatus(false);
+    toggleStatus(false);
 
-  NotificationService.dispose();
+    NotificationService.dispose();
 
-  _messageListener?.cancel();
+    
 
-  nameController.dispose();
-  phoneController.dispose();
-  serviceController.dispose();
+    nameController.dispose();
+    phoneController.dispose();
+    serviceController.dispose();
 
-  super.dispose();
-}
-Future<void> openGeneralChats() async {
+    super.dispose();
+  }
+
+  Future<void> openChat(String userId) async {
+  if (userId.isEmpty || widget.providerId.isEmpty) return;
+
+  String customerName = "Customer";
+
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(userId)
+      .get();
+
+  if (userDoc.exists) {
+    customerName = userDoc.data()?['name'] ?? "Customer";
+  }
+
+  final chatId = userId.compareTo(widget.providerId) < 0
+      ? "${userId}_${widget.providerId}"
+      : "${widget.providerId}_$userId";
+
+  await FirebaseFirestore.instance
+      .collection('chats')
+      .doc(chatId)
+      .set({
+    'participants': [
+      userId,
+      widget.providerId,
+    ],
+    'participantNames': {
+      userId: customerName,
+      widget.providerId: widget.providerName,
+    },
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+
+  if (!mounted) return;
+
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => CustomerChatsScreen(
-  providerId: widget.providerId,
-  providerName: widget.providerName,
-),
+      builder: (_) => ChatScreen(
+        chatId: chatId,
+        senderId: widget.providerId,
+        receiverId: userId,
+        chatName: customerName,
+        senderName: widget.providerName,
+      ),
     ),
   );
 }
-//
 
-Widget earningsCard() {
-  return StreamBuilder<QuerySnapshot>(
-    stream: _firestore
-        .collection('requests')
-        .where('providerId', isEqualTo: widget.providerId)
-        .where('status', isEqualTo: 'completed')
-        .snapshots(),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData) return const SizedBox();
+  Widget earningsCard() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('requests')
+          .where('providerId', isEqualTo: widget.providerId)
+          .where('status', isEqualTo: 'completed')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox();
 
-      double totalEarned = 0;
-      double pendingCommission = 0;
+        double totalEarned = 0;
+        double pendingCommission = 0;
 
-      for (var doc in snapshot.data!.docs) {
-        final data = doc.data() as Map<String, dynamic>;
+        for (var doc in snapshot.data!.docs) {
+          final data = doc.data() as Map<String, dynamic>;
 
-        totalEarned += (data['providerEarning'] ?? 0).toDouble();
+          totalEarned += (data['providerEarning'] ?? 0).toDouble();
 
-        if (data['providerMarkedPaid'] != true) {
-          pendingCommission += (data['commission'] ?? 0).toDouble();
+          if (data['providerMarkedPaid'] != true) {
+            pendingCommission += (data['commission'] ?? 0).toDouble();
+          }
         }
-      }
 
-      return Card(
-        margin: const EdgeInsets.all(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Text(
-                "Earnings Summary",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 10),
-              Text("Total Earned: ₦${totalEarned.toStringAsFixed(0)}"),
-              Text("Pending Commission: ₦${pendingCommission.toStringAsFixed(0)}"),
-            ],
+        return Card(
+          margin: const EdgeInsets.all(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Text(
+                  "Earnings Summary",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                const SizedBox(height: 10),
+                Text("Total Earned: ₦${totalEarned.toStringAsFixed(0)}"),
+                Text(
+                    "Pending Commission: ₦${pendingCommission.toStringAsFixed(0)}"),
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
+
   // =========================
   // LOAD PROFILE
   // =========================
   Future<void> loadProviderData() async {
-    final doc = await _firestore
-        .collection('providers')
-        .doc(widget.providerId)
-        .get();
+    final doc =
+        await _firestore.collection('providers').doc(widget.providerId).get();
 
     if (!doc.exists) return;
 
@@ -226,8 +225,7 @@ Widget earningsCard() {
       phoneController.text = data['phone'] ?? '';
       serviceController.text = data['service'] ?? '';
 
-      address =
-          data['address'] ??
+      address = data['address'] ??
           data['location']?['address'] ??
           "Location not available";
     });
@@ -237,27 +235,25 @@ Widget earningsCard() {
   // EDIT PROFILE
   // =========================
   Future<void> openEditProfile() async {
-  await showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    builder: (_) => ProviderEditProfile(
-      providerId: widget.providerId,
-    ),
-  );
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ProviderEditProfile(
+        providerId: widget.providerId,
+      ),
+    );
 
-  // Reload provider data
-  await loadProviderData();
+    // Reload provider data
+    await loadProviderData();
 
-  // Save latest FCM token
-  final token = await FirebaseMessaging.instance.getToken();
+    // Save latest FCM token
+    final token = await NotificationService.getToken();
 
-  await _firestore
-      .collection('providers')
-      .doc(widget.providerId)
-      .set({
-    'fcmToken': token,
-  }, SetOptions(merge: true));
-}
+    await _firestore.collection('providers').doc(widget.providerId).set({
+      'fcmToken': token,
+    }, SetOptions(merge: true));
+  }
+
   // =========================
   // ONLINE/OFFLINE
   // =========================
@@ -273,157 +269,98 @@ Widget earningsCard() {
   // =========================
 // ADMIN CHAT (FULL HISTORY FIXED)
 // =========================
-void openAdminChat() async {
-  final providerId = widget.providerId;
+  void openAdminChat() async {
+    final providerId = widget.providerId;
 
-  if (providerId.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Invalid provider ID")),
+    if (providerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid provider ID")),
+      );
+      return;
+    }
+
+    final chatId = "ADMIN_SUPPORT_$providerId";
+
+    await _firestore.collection('chats').doc(chatId).set({
+      'participants': [
+        "ADMIN_SUPPORT",
+        widget.providerId,
+      ],
+      'participantNames': {
+        "ADMIN_SUPPORT": "ADMIN SUPPORT",
+        widget.providerId: widget.providerName,
+      },
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          chatId: chatId,
+          senderId: providerId,
+          receiverId: "ADMIN_SUPPORT",
+          chatName: "ADMIN SUPPORT",
+          senderName: widget.providerName,
+        ),
+      ),
     );
-    return;
   }
 
-  final chatId = "ADMIN_SUPPORT_$providerId";
-
-  await _firestore
-    .collection('chats')
-    .doc(chatId)
-    .set({
-  'participants': [
-    "ADMIN_SUPPORT",
-    widget.providerId,
-  ],
-
-  'participantNames': {
-    "ADMIN_SUPPORT": "ADMIN SUPPORT",
-    widget.providerId: widget.providerName,
-  },
-
-  'updatedAt': FieldValue.serverTimestamp(),
-}, SetOptions(merge: true));
-  if (!mounted) return;
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-    builder: (_) => ChatScreen(
-  chatId: chatId,
-  senderId: providerId,
-  receiverId: "ADMIN_SUPPORT",
-  chatName: "ADMIN SUPPORT",
-  senderName: widget.providerName,
-),
-    ),
-  );
-}
   // =========================
   // CHAT WITH USER
-  // =========================
-  void openChat(String userId) async {
-  if (userId.isEmpty || widget.providerId.isEmpty) return;
+  // ======================
+  Future<void> acceptRequest(String requestId) async {
+    await _firestore.collection('requests').doc(requestId).set({
+      'status': 'accepted',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-  final chatId =
-      userId.compareTo(widget.providerId) < 0
-          ? '${userId}_${widget.providerId}'
-          : '${widget.providerId}_$userId';
-
-  // Get user name
-  String userName = "Customer";
-
-  final userDoc = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(userId)
-      .get();
-
-  if (userDoc.exists) {
-    userName = userDoc['name'] ?? "Customer";
+    await addHistory(requestId, "Request accepted");
   }
 
-  await FirebaseFirestore.instance
-      .collection('chats')
-      .doc(chatId)
-      .set({
-    'participants': [
-      userId,
-      widget.providerId,
-    ],
+  Future<void> rejectRequest(String requestId) async {
+    await _firestore.collection('requests').doc(requestId).set({
+      'status': 'rejected',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-    'participantNames': {
-      userId: userName,
-      widget.providerId: widget.providerName,
-    },
-
-    'updatedAt': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
-
-  if (!mounted) return;
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ChatScreen(
-  chatId: chatId,
-  senderId: widget.providerId,
-  receiverId: userId,
-  chatName: userName,
-  senderName: widget.providerName,
-),
-    ),
-  );
-}
-  // =========================
-  // ACCEPT / REJECT
-  // =========================
- Future<void> acceptRequest(String id) async {
-  await _firestore.collection('requests').doc(id).set({
-    'status': 'accepted',
-    'updatedAt': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
-
-  await addHistory(id, "Request accepted");
-}
-
-Future<void> rejectRequest(String id) async {
-  await _firestore.collection('requests').doc(id).set({
-    'status': 'rejected',
-    'updatedAt': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
-
-  await addHistory(id, "Request rejected");
-}
+    await addHistory(requestId, "Request rejected");
+  }
 
   // =========================
   // COMPLETE JOB
   // =========================
   Future<void> markAsDone(String id, double amount) async {
-  const commissionRate = 0.10;
+    const commissionRate = 0.10;
 
-  final commission = amount * commissionRate;
-  final providerEarning = amount - commission;
+    final commission = amount * commissionRate;
+    final providerEarning = amount - commission;
 
-  await _firestore.collection('requests').doc(id).set({
-    'status': 'completed',
-    'completed': true,
-    'amount': amount,
-    'commission': commission,
-    'providerEarning': providerEarning,
-    'commissionPaid': false,
-    'completedAt': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
+    await _firestore.collection('requests').doc(id).set({
+      'status': 'completed',
+      'completed': true,
+      'amount': amount,
+      'commission': commission,
+      'providerEarning': providerEarning,
+      'commissionPaid': false,
+      'completedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-  await addHistory(
-    id,
-    "Job completed. Earned ₦${providerEarning.toStringAsFixed(0)}, Commission ₦${commission.toStringAsFixed(0)}",
-  );
+    await addHistory(
+      id,
+      "Job completed. Earned ₦${providerEarning.toStringAsFixed(0)}, Commission ₦${commission.toStringAsFixed(0)}",
+    );
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text("Earned ₦${providerEarning.toStringAsFixed(0)}"),
-    ),
-  );
-}
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Earned ₦${providerEarning.toStringAsFixed(0)}"),
+      ),
+    );
+  }
 
   void showCompleteJobDialog(String requestId) {
     final amountController = TextEditingController();
@@ -459,65 +396,64 @@ Future<void> rejectRequest(String id) async {
   // MARK COMMISSION PAID
   // =========================
   Future<void> markCommissionPaid(String requestId) async {
-  final ref = _firestore.collection('requests').doc(requestId);
+    final ref = _firestore.collection('requests').doc(requestId);
 
-  await ref.set({
-    'providerMarkedPaid': true,
-    'providerPaidAt': FieldValue.serverTimestamp(),
-    'providerPaymentStatus': 'paid_pending_admin_review',
-  }, SetOptions(merge: true));
+    await ref.set({
+      'providerMarkedPaid': true,
+      'providerPaidAt': FieldValue.serverTimestamp(),
+      'providerPaymentStatus': 'paid_pending_admin_review',
+    }, SetOptions(merge: true));
 
-  await addHistory(requestId, "Commission marked as PAID by provider");
+    await addHistory(requestId, "Commission marked as PAID by provider");
 
-  final chatId = "ADMIN_SUPPORT_${widget.providerId}";
- await _firestore.collection("chats").doc(chatId).set({
-  "participants": [
-    "ADMIN_SUPPORT",
-    widget.providerId,
-  ],
+    final chatId = "ADMIN_SUPPORT_${widget.providerId}";
+    await _firestore.collection("chats").doc(chatId).set({
+      "participants": [
+        "ADMIN_SUPPORT",
+        widget.providerId,
+      ],
+      "participantNames": {
+        "ADMIN_SUPPORT": "ADMIN SUPPORT",
+        widget.providerId: widget.providerName,
+      },
+      "lastMessage": "Commission marked as paid",
+      "updatedAt": FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-  "participantNames": {
-    "ADMIN_SUPPORT": "ADMIN SUPPORT",
-    widget.providerId: widget.providerName,
-  },
+    await _firestore
+        .collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .add({
+      "senderId": widget.providerId,
+      "message": "I have paid commission for request $requestId",
+      "timestamp": FieldValue.serverTimestamp(),
+    });
 
-  "lastMessage": "Commission marked as paid",
-  "updatedAt": FieldValue.serverTimestamp(),
-}, SetOptions(merge: true));
-
-  await _firestore.collection("chats").doc(chatId).collection("messages").add({
-    "senderId": widget.providerId,
-    "message": "I have paid commission for request $requestId",
-    "timestamp": FieldValue.serverTimestamp(),
-  });
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Payment sent to admin")),
-  );
-}
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Payment sent to admin")),
+    );
+  }
 
   // =========================
   // LOGOUT
   // =========================
   Future<void> logout() async {
-  await _firestore
-      .collection('providers')
-      .doc(widget.providerId)
-      .set({
-    'isOnline': false,
-    'lastSeen': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
+    await _firestore.collection('providers').doc(widget.providerId).set({
+      'isOnline': false,
+      'lastSeen': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-  await _auth.signOut();
+    await _auth.signOut();
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  Navigator.pushAndRemoveUntil(
-    context,
-    MaterialPageRoute(builder: (_) => const LoginScreen()),
-    (route) => false,
-  );
-}
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
 
   Color statusColor(String status) {
     switch (status) {
@@ -541,95 +477,96 @@ Future<void> rejectRequest(String id) async {
       appBar: AppBar(
         title: Text("Provider: ${widget.providerName}"),
         actions: [
-  IconButton(
-    icon: const Icon(Icons.chat),
-    tooltip: "Customer Chats",
-    onPressed: openCustomerChats,
-  ),
-
-  IconButton(
-    icon: const Icon(Icons.support_agent),
-    tooltip: "Admin Support",
-    onPressed: openAdminChat,
-  ),
-
-  IconButton(
-    icon: const Icon(Icons.edit),
-    onPressed: openEditProfile,
-  ),
-
-  IconButton(
-    icon: const Icon(Icons.logout),
-    onPressed: logout,
-  ),
-
-  Row(
-    children: [
-      Text(isOnline ? "Online" : "Offline"),
-      Switch(
-        value: isOnline,
-        onChanged: toggleStatus,
+          IconButton(
+              icon: const Icon(Icons.chat),
+              tooltip: "Customer Chats",
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "Open a customer chat from one of the requests below.",
+                    ),
+                  ),
+                );
+              }),
+          IconButton(
+            icon: const Icon(Icons.support_agent),
+            tooltip: "Admin Support",
+            onPressed: openAdminChat,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: openEditProfile,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: logout,
+          ),
+          Row(
+            children: [
+              Text(isOnline ? "Online" : "Offline"),
+              Switch(
+                value: isOnline,
+                onChanged: toggleStatus,
+              ),
+            ],
+          ),
+        ],
       ),
-    ],
-  ),
-],
-      ),
-
       body: Column(
-  children: [
+        children: [
+          // ✅ Earnings summary goes FIRST
+          earningsCard(),
 
-    // ✅ Earnings summary goes FIRST
-    earningsCard(),
-
-    // =========================
-    // COMMISSION ACCOUNT CARD
-    // =========================
-    Card(
-      margin: const EdgeInsets.all(12),
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: const [
-            Text(
-              "Commission Payment Account",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+          // =========================
+          // COMMISSION ACCOUNT CARD
+          // =========================
+          Card(
+            margin: const EdgeInsets.all(12),
+            elevation: 3,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: const [
+                  Text(
+                    "Commission Payment Account",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text("Kuda Microfinance Bank"),
+                  SizedBox(height: 6),
+                  SelectableText(
+                    "2082918233",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    "Pay commission after completing jobs then tap 'I Have Paid'",
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: 8),
-            Text("Kuda Microfinance Bank"),
-            SizedBox(height: 8),
-            SelectableText(
-              "2082918233",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              "Pay commission after completing jobs then tap 'I Have Paid'",
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    ),
+          ),
 
-    // =========================
-    // REQUEST LIST
-    // =========================
-    Expanded(
-      child: StreamBuilder<QuerySnapshot>(
-        stream: _firestore
-            .collection('requests')
-            .where('providerId', isEqualTo: widget.providerId)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
+          // =========================
+          // REQUEST LIST
+          // =========================
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('requests')
+                  .where('providerId', isEqualTo: widget.providerId)
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -656,45 +593,45 @@ Future<void> rejectRequest(String id) async {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(data['category'] ?? '',
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
-
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
                             Text(data['description'] ?? ''),
                             Text("Amount: ₦${data['amount'] ?? 0}"),
-
                             const SizedBox(height: 10),
-
                             Wrap(
-  spacing: 8,
-  children: [
+                              spacing: 8,
+                              children: [
 
-    if (status == 'pending')
-      ElevatedButton(
-        onPressed: () => acceptRequest(id),
-        child: const Text("Accept"),
-      ),
+                                ElevatedButton.icon(
+  onPressed: () => openChat(userId),
+  icon: const Icon(Icons.chat),
+  label: const Text("Chat"),
+),
 
-    if (status == 'pending')
-      ElevatedButton(
-        onPressed: () => rejectRequest(id),
-        child: const Text("Reject"),
-      ),
-
-    if (status == 'accepted')
-      ElevatedButton(
-        onPressed: () => showCompleteJobDialog(id),
-        child: const Text("Done"),
-      ),
-
-    if (status == 'completed' &&
-        data['providerMarkedPaid'] != true)
-      ElevatedButton.icon(
-        onPressed: () => markCommissionPaid(id),
-        icon: const Icon(Icons.check),
-        label: const Text("I Have Paid"),
-      ),
-  ],
-)
-                            
+                                if (status == 'pending')
+                                  ElevatedButton(
+                                    onPressed: () => acceptRequest(id),
+                                    child: const Text("Accept"),
+                                  ),
+                                if (status == 'pending')
+                                  ElevatedButton(
+                                    onPressed: () => rejectRequest(id),
+                                    child: const Text("Reject"),
+                                  ),
+                                if (status == 'accepted')
+                                  ElevatedButton(
+                                    onPressed: () => showCompleteJobDialog(id),
+                                    child: const Text("Done"),
+                                  ),
+                                if (status == 'completed' &&
+                                    data['providerMarkedPaid'] != true)
+                                  ElevatedButton.icon(
+                                    onPressed: () => markCommissionPaid(id),
+                                    icon: const Icon(Icons.check),
+                                    label: const Text("I Have Paid"),
+                                  ),
+                              ],
+                            )
                           ],
                         ),
                       ),
@@ -709,8 +646,3 @@ Future<void> rejectRequest(String id) async {
     );
   }
 }
-
-
-
-
-
