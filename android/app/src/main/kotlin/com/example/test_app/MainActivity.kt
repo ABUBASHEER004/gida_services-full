@@ -1,4 +1,4 @@
-package com.example.gida_services
+package com.example.test_app
 
 import io.flutter.embedding.android.FlutterActivity
 
